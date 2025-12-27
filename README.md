@@ -23,7 +23,7 @@ docker run --rm --name authdl \
   qvgz/authdl
 
 # 查看版本
-docker exec -it authdl ./authdl vsrsion
+docker exec -it authdl ./authdl version
 # 检查配置
 docker exec -it authdl ./authdl check
 # 优雅重启

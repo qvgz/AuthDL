@@ -398,6 +398,14 @@ func main() {
 			}
 			fmt.Printf("Reload signal (SIGHUP) sent to PID %d\n", pid)
 			os.Exit(0)
+		default:
+			// 如果是 flag (以 - 开头)，则跳过 switch 交给 flag.Parse() 处理
+			// 如果不是 flag 且不是已知命令，则报错
+			if !strings.HasPrefix(os.Args[1], "-") {
+				fmt.Printf("Unknown command: %s\n", os.Args[1])
+				fmt.Println("Usage: authdl [version|check|reload]")
+				os.Exit(1)
+			}
 		}
 	}
 
