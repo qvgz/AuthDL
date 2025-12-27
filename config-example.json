@@ -1,0 +1,6 @@
+{
+  "baseURL": "http://a.com/",
+  "encryptKey": "xxxx",
+  "deadline": 60,
+  "enableCaptcha": true
+}

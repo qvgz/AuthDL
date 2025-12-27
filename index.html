@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>安全下载网关</title>
+    <style>
+        :root {
+            --primary: #007bff;
+            --error: #dc3545;
+            --bg: #f4f6f8;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+        }
+
+        .auth-card {
+            background: #fff;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            width: 90%;
+            max-width: 380px;
+            text-align: center;
+        }
+
+        .file-info {
+            background: #eef2f7;
+            color: #495057;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            font-family: monospace;
+            word-break: break-all;
+            border: 1px solid #dee2e6;
+        }
+
+        .captcha-container {
+            position: relative;
+            margin-bottom: 20px;
+            height: 80px;
+            background: #fafafa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: border-color 0.2s;
+        }
+
+        .captcha-container:hover {
+            border-color: var(--primary);
+        }
+
+        .captcha-container img {
+            max-height: 100%;
+            max-width: 100%;
+            display: block;
+        }
+
+        .input-code {
+            width: 100%;
+            padding: 14px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 20px;
+            text-align: center;
+            letter-spacing: 6px;
+            box-sizing: border-box;
+            transition: all 0.2s;
+            outline: none;
+            margin-bottom: 20px;
+        }
+
+        .input-code:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+        }
+
+        .btn-submit {
+            width: 100%;
+            padding: 14px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-submit:hover {
+            background: #0056b3;
+        }
+
+        .btn-submit:disabled {
+            background: #aab2bd;
+            cursor: not-allowed;
+        }
+
+        .status-msg {
+            margin-top: 15px;
+            font-size: 14px;
+            min-height: 20px;
+            color: var(--error);
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .status-msg.visible {
+            opacity: 1;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="auth-card">
+        <h2 style="margin: 0 0 20px 0; color: #333;">安全下载验证</h2>
+        <div class="file-info" id="fileNameDisplay">正在解析...</div>
+
+        <div class="captcha-container" id="captchaBox" title="点击刷新">
+            <span style="color:#adb5bd;font-size:12px">加载中...</span>
+        </div>
+
+        <input type="text" id="codeVal" class="input-code" placeholder="输入5位验证码" maxlength="5" autocomplete="off"
+            inputmode="numeric">
+        <button id="verifyBtn" class="btn-submit">立即下载</button>
+        <div id="errMsg" class="status-msg"></div>
+    </div>
+
+    <script>
+        (function () {
+            const els = {
+                fileDisplay: document.getElementById('fileNameDisplay'),
+                box: document.getElementById('captchaBox'),
+                input: document.getElementById('codeVal'),
+                btn: document.getElementById('verifyBtn'),
+                err: document.getElementById('errMsg')
+            };
+
+            let state = { captchaId: "", loading: false, captchaEnabled: true };
+            const currentPath = window.location.pathname;
+
+            // 1. 路径检查
+            if (!currentPath || currentPath === "/" || currentPath === "/index.html") {
+                els.fileDisplay.textContent = "未指定下载文件";
+                els.fileDisplay.style.color = "#dc3545";
+                els.input.disabled = els.btn.disabled = true;
+                els.box.classList.add('hidden');
+                return;
+            }
+            els.fileDisplay.textContent = decodeURIComponent(currentPath.substring(1));
+
+            const actions = {
+                showError: (msg) => {
+                    els.err.textContent = msg;
+                    els.err.classList.add('visible');
+                    // 3秒后自动清除错误
+                    setTimeout(() => els.err.classList.remove('visible'), 3000);
+                },
+                refreshCaptcha: async () => {
+                    if (!state.captchaEnabled) return;
+                    els.err.classList.remove('visible');
+                    els.box.innerHTML = '<span style="color:#999;font-size:12px">加载中...</span>';
+
+                    try {
+                        const res = await fetch('/api/captcha');
+                        if (!res.ok) throw new Error("API Error");
+                        const data = await res.json();
+
+                        if (data.enabled === false) {
+                            state.captchaEnabled = false;
+                            els.box.classList.add('hidden');
+                            els.input.classList.add('hidden');
+                            els.btn.textContent = "获取下载链接";
+                            return;
+                        }
+
+                        state.captchaId = data.id;
+                        els.box.innerHTML = `<img src="${data.image}" alt="验证码">`;
+                        els.box.classList.remove('hidden');
+                        els.input.classList.remove('hidden');
+                    } catch (e) {
+                        els.box.innerHTML = '<span style="color:#dc3545;font-size:12px">点击重试</span>';
+                    }
+                },
+                submit: async () => {
+                    const code = els.input.value.trim();
+                    if (state.captchaEnabled && !code) {
+                        actions.showError("请输入验证码");
+                        els.input.focus();
+                        return;
+                    }
+                    if (state.loading) return;
+
+                    state.loading = true;
+                    els.btn.disabled = true;
+                    els.btn.textContent = "请求中...";
+                    els.err.classList.remove('visible');
+
+                    try {
+                        const res = await fetch('/api/verify-download', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                captchaId: state.captchaId,
+                                verifyCode: code,
+                                filename: currentPath
+                            })
+                        });
+                        const data = await res.json();
+
+                        if (res.status === 200 && data.status === 'ok') {
+                            els.btn.textContent = "即将跳转...";
+                            els.btn.style.background = "#28a745";
+                            window.location.replace(data.url);
+                        } else {
+                            throw new Error(data.msg || "验证失败");
+                        }
+                    } catch (e) {
+                        state.loading = false;
+                        els.btn.disabled = false;
+                        els.btn.textContent = state.captchaEnabled ? "立即下载" : "获取下载链接";
+                        actions.showError(e.message);
+                        if (state.captchaEnabled) {
+                            actions.refreshCaptcha();
+                            els.input.value = "";
+                        }
+                    }
+                }
+            };
+
+            els.box.addEventListener('click', actions.refreshCaptcha);
+            els.btn.addEventListener('click', actions.submit);
+            els.input.addEventListener('keypress', (e) => { if (e.key === 'Enter') actions.submit() });
+
+            // 页面加载自动运行
+            actions.refreshCaptcha();
+        })();
+    </script>
+</body>
+
+</html>
