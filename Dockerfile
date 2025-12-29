@@ -1,9 +1,16 @@
-FROM golang:latest AS builder
+
+FROM --platform=$BUILDPLATFORM golang:latest AS builder
+ARG TARGETOS
+ARG TARGETARCH
 ARG VERSION=dev
 WORKDIR /app
-COPY go.mod go.sum index.html main.go ./
+COPY go.mod go.sum ./
 RUN go mod download
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w -X main.Version=${VERSION}" -o authdl ./main.go
+COPY index.html main.go ./
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+  go build -trimpath -buildvcs=false \
+  -ldflags="-s -w -buildid= -X main.Version=${VERSION}" \
+  -o authdl ./main.go
 
 FROM gcr.io/distroless/static-debian13:nonroot
 WORKDIR /app
